@@ -6,13 +6,12 @@ import java.util.ArrayList;
 import org.junit.Test;
 
 public class CalciteParserAdaptorTest {
-  @Test
-  public void testParseAndSplit() {
+  private ArrayList<String> tests(int random) {
     ArrayList<String> standard_select = new ArrayList<String>();
-    standard_select.add("select 1");
-    standard_select.add("select * from my_table");
-    standard_select.add(
-        "SELECT\n"
+    standard_select.add(String.format("select %d", random));
+    standard_select.add(String.format("select *, %d from my_table", random));
+    standard_select.add(String.format(
+        "SELECT %d\n"
             + "customerNumber,  \n"
             + "    customerName \n"
             + "FROM \n"
@@ -27,7 +26,13 @@ public class CalciteParserAdaptorTest {
             + "        WHERE \n"
             + "            customerNumber = customers.customerNumber \n"
             + "        GROUP BY orderNumber \n"
-            + "        HAVING SUM(priceEach * quantityOrdered) > 60000)");
+            + "        HAVING SUM(priceEach * quantityOrdered) > 60000)", random));
+    return standard_select;
+  }
+
+  @Test
+  public void testParseAndSplit() {
+    ArrayList<String> standard_select = tests(1);
 
     // one standard SQL statement
     for (String sql : standard_select) {
@@ -95,5 +100,24 @@ public class CalciteParserAdaptorTest {
       assertEquals(-1, parse_result.Position);
       assertTrue(parse_result.Error.startsWith("Encountered \"to\" at line 1, column 16."));
     }
+  }
+
+  @Test
+  public void testParseAndSplitPerf() {
+    int count = 10000;
+    CalciteParserAdaptor parser = new CalciteParserAdaptor();
+    long started = System.currentTimeMillis();
+    for (int i=0; i<count; ++i) {
+      for (String sql : tests(i)) {
+        String sql_program = String.format("%s;", sql);
+        ParseResult pr = parser.ParseAndSplit(sql_program);
+        assertEquals("", pr.Error);
+      }
+    }
+    long costs = System.currentTimeMillis() - started;
+    // #count*tests(0).size() vs costs millisecond
+    // 10000 * 3 -> 16253
+    // 1000 * 3 -> 4576
+    System.out.println(costs);
   }
 }
