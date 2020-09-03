@@ -15,6 +15,7 @@ import sys
 
 import runtime.pai.pai_distributed as pai_dist
 import six
+import datetime
 import xgboost as xgb
 from runtime.local.xgboost_submitter.save import save_model_to_local_file
 from runtime.model import collect_metadata
@@ -56,7 +57,7 @@ def dist_train(flags,
     master_host = master_addr[0]
     master_port = int(master_addr[1]) + 1
     tracker = None
-    print("node={}, task_id={}, cluster={}".format(node, task_id, cluster))
+    print("{} dist_train, node={} task_id={} cluster={}".format(datetime.datetime.now(), node, task_id, cluster))
     try:
         if node == 'ps':
             if task_id == 0:
@@ -100,10 +101,12 @@ def dist_train(flags,
         print("node={}, id={}, exception={}".format(node, task_id, e))
         six.reraise(*sys.exc_info())  # For better backtrace
     finally:
+        print("{} finally begins".format(datetime.datetime.now()))
         if tracker is not None:
             tracker.join()
         if node != 'ps':
             xgb.rabit.finalize()
+        print("{} finally ends".format(datetime.datetime.now()))
 
 
 def train(datasource,
@@ -130,7 +133,7 @@ def train(datasource,
           original_sql=""):
     if batch_size == -1:
         batch_size = None
-    print("Start training XGBoost model...")
+    print("{} Start reading training dataset...".format(datetime.datetime.now()))
     dtrain = xgb_dataset(datasource,
                          'train.txt',
                          select,
@@ -168,6 +171,7 @@ def train(datasource,
     else:
         bst = None
 
+    print("{} Start training...".format(datetime.datetime.now()))
     re = None
     for per_batch_dmatrix in dtrain:
         watchlist = [(per_batch_dmatrix, "train")]
@@ -181,9 +185,11 @@ def train(datasource,
                         evals_result=re,
                         xgb_model=bst,
                         **train_params)
+        print("{} train a batch completed".format(datetime.datetime.now()))
         print("Evaluation result: %s" % re)
 
     if rank == 0:
+        print("{} Start saving model on rank:0...".format(datetime.datetime.now()))
         # TODO(sneaxiy): collect features and label
         metadata = collect_metadata(original_sql=original_sql,
                                     select=select,
@@ -200,6 +206,7 @@ def train(datasource,
             save_model(oss_model_dir, filename, model_params, train_params,
                        feature_metas, feature_column_names, label_meta,
                        feature_column_code)
+    print("{} Completed".format(datetime.datetime.now()))
 
 
 def save_model(model_dir, filename, model_params, train_params, feature_metas,
